@@ -24,7 +24,7 @@ const SSH_USER = "root";
 const PALWORLD_START_COMMAND = "/root/palworld/start.sh";
 
 // Discordトークン
-const DISCORD_BOT_TOKEN = env.DISCORD_TOKEN;
+const DISCORD_BOT_TOKEN = process.env.DISCORD_TOKEN;
 
 // 認証トークン取得
 async function getToken() {
