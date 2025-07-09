@@ -17,7 +17,7 @@ const SSH_USER = "root";  // or your ssh user
 const PALWORLD_START_COMMAND = "/root/palworld/start.sh";  // VPS内の起動スクリプト例
 
 // Discord Botトークン
-const DISCORD_BOT_TOKEN = "your_discord_bot_token";
+const DISCORD_BOT_TOKEN = process.env.DISCORD_TOKEN;
 
 // 1. ConoHa APIでトークン取得
 async function getToken() {
