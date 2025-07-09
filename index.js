@@ -21,7 +21,7 @@ const PASSWORD = "Y6xLYEsN-k3muLU";
 // VPSサーバー情報
 const VPS_IP = "160.251.181.17";
 const SSH_USER = "root";
-const PALWORLD_START_COMMAND = "/root/palworld/start.sh";
+const PALWORLD_START_COMMAND = "/root/start.sh";
 
 // Discordトークン
 const DISCORD_BOT_TOKEN = process.env.DISCORD_TOKEN;
