@@ -6,7 +6,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 
 // ConoHa情報
 const CONOHA_IDENTITY_URL = "https://identity.c3j1.conoha.io/v3/auth/tokens";
-const CONOHA_COMPUTE_URL = "https://compute.c3j1.conoha.io/v2"; // + /<tenant_id>
+const CONOHA_COMPUTE_URL = "https://compute.c3j1.conoha.io/v2.1"; // + /<tenant_id>
 const TENANT_ID = "7544f37d10be4ff7a638d1b34c6732b1";  // テナントID
 const USERNAME = "gncu33184909";
 const PASSWORD = "Y6xLYEsN-k3muLU";
