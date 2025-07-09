@@ -14,7 +14,7 @@ const client = new Client({
 const CONOHA_IDENTITY_URL = "https://identity.c3j1.conoha.io/v3/auth/tokens";
 const CONOHA_COMPUTE_URL = "https://compute.c3j1.conoha.io/v2.1";
 const TENANT_ID = "7544f37d10be4ff7a638d1b34c6732b1";
-const SERVER_ID = "b9d544e5-5606-4125-81f8-05a61d1e6f01"; // ← 必ず置き換え
+const SERVER_ID = "b9d544e5-5606-4125-81f8-05a61d1e6f01";
 const USERNAME = "gncu33184909";
 const PASSWORD = "Y6xLYEsN-k3muLU";
 
@@ -26,7 +26,7 @@ const PALWORLD_START_COMMAND = "/root/palworld/start.sh";
 // Discordトークン
 const DISCORD_BOT_TOKEN = process.env.DISCORD_TOKEN;
 
-// 認証トークン取得
+// トークン取得
 async function getToken() {
   const res = await fetch(CONOHA_IDENTITY_URL, {
     method: "POST",
@@ -54,34 +54,40 @@ async function getToken() {
   return token;
 }
 
+// VPS状態取得
+async function getVPSStatus(token) {
+  const url = `${CONOHA_COMPUTE_URL}/servers/${SERVER_ID}`;
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      "X-Auth-Token": token,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!res.ok) throw new Error(`VPS status check failed: ${res.statusText}`);
+  const data = await res.json();
+  return data.server.status; // "ACTIVE", "SHUTOFF" など
+}
+
 // VPS起動
 async function startVPS(token) {
-  const url = `${CONOHA_COMPUTE_URL}/servers/${SERVER_ID}/action`;
-  const body = { "os-start": null };
+  const status = await getVPSStatus(token);
+  if (status === "ACTIVE") {
+    return "VPSはすでに起動しています。";
+  }
 
-  console.log("=== VPS 起動リクエスト送信 ===");
-  console.log("URL:", url);
-  console.log("ヘッダー:", {
-    "X-Auth-Token": token,
-    "Content-Type": "application/json",
-  });
-  console.log("ボディ:", JSON.stringify(body));
-
-  const res = await fetch(url, {
+  const res = await fetch(`${CONOHA_COMPUTE_URL}/servers/${SERVER_ID}/action`, {
     method: "POST",
     headers: {
       "X-Auth-Token": token,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ "os-start": null }),
   });
 
-  console.log("ステータス:", res.status);
-  const text = await res.text();
-  console.log("レスポンス:", text);
-
   if (!res.ok) throw new Error(`VPS start failed: ${res.statusText}`);
-  return true;
+  return "VPSを起動しました。";
 }
 
 // VPS停止
@@ -96,7 +102,7 @@ async function stopVPS(token) {
   });
 
   if (!res.ok) throw new Error(`VPS stop failed: ${res.statusText}`);
-  return true;
+  return "VPSを停止しました。";
 }
 
 // Palworld起動（SSH）
@@ -121,22 +127,22 @@ client.on("messageCreate", async (message) => {
     await message.reply("pong!");
   }
 
-  if (message.content === "!startvps") {
+  if (message.content === "!start") {
     try {
       const token = await getToken();
-      await startVPS(token);
+      const startMsg = await startVPS(token);
       const result = await startPalworldServer();
-      await message.channel.send(`VPSを起動し、Palworldサーバーも起動しました。\n接続先: ${VPS_IP}\n起動結果: ${result}`);
+      await message.channel.send(`${startMsg}\nPalworldサーバーを起動しました。\n接続先: ${VPS_IP}\n実行結果: ${result}`);
     } catch (err) {
       await message.channel.send(`エラー: ${err.message}`);
     }
   }
 
-  if (message.content === "!stopvps") {
+  if (message.content === "!stop") {
     try {
       const token = await getToken();
-      await stopVPS(token);
-      await message.channel.send("VPSを停止しました。");
+      const msg = await stopVPS(token);
+      await message.channel.send(msg);
     } catch (err) {
       await message.channel.send(`エラー: ${err.message}`);
     }
@@ -145,5 +151,5 @@ client.on("messageCreate", async (message) => {
 
 client.login(DISCORD_BOT_TOKEN);
 
-// 常駐維持（Railway対応）
+// Railway対応: 常駐維持
 setInterval(() => {}, 1 << 30);
