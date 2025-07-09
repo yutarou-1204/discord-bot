@@ -56,7 +56,7 @@ async function getToken() {
 
 // VPS起動
 async function startVPS(token) {
-  const url = `${CONOHA_COMPUTE_URL}/${TENANT_ID}/servers/${SERVER_ID}/action`;
+  const url = `${CONOHA_COMPUTE_URL}/servers/${SERVER_ID}/action`;
   const body = { "os-start": null };
 
   console.log("=== VPS 起動リクエスト送信 ===");
@@ -86,7 +86,7 @@ async function startVPS(token) {
 
 // VPS停止
 async function stopVPS(token) {
-  const res = await fetch(`${CONOHA_COMPUTE_URL}/${TENANT_ID}/servers/${SERVER_ID}/action`, {
+  const res = await fetch(`${CONOHA_COMPUTE_URL}/servers/${SERVER_ID}/action`, {
     method: "POST",
     headers: {
       "X-Auth-Token": token,
