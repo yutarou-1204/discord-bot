@@ -12,7 +12,7 @@ const client = new Client({
 
 // ConoHa設定
 const CONOHA_IDENTITY_URL = "https://identity.c3j1.conoha.io/v3/auth/tokens";
-const CONOHA_COMPUTE_URL = "https://compute.c3j1.conoha.io/v2";
+const CONOHA_COMPUTE_URL = "https://compute.c3j1.conoha.io/v2.1";
 const TENANT_ID = "7544f37d10be4ff7a638d1b34c6732b1";
 const SERVER_ID = "b9d544e5-5606-4125-81f8-05a61d1e6f01"; // ← 必ず置き換え
 const USERNAME = "gncu33184909";
@@ -24,7 +24,7 @@ const SSH_USER = "root";
 const PALWORLD_START_COMMAND = "/root/palworld/start.sh";
 
 // Discordトークン
-const DISCORD_BOT_TOKEN = process.env.DISCORD_TOKEN;
+const DISCORD_BOT_TOKEN = env.DISCORD_TOKEN;
 
 // 認証トークン取得
 async function getToken() {
@@ -56,7 +56,7 @@ async function getToken() {
 
 // VPS起動
 async function startVPS(token) {
-  const url = `${CONOHA_COMPUTE_URL}/servers/${SERVER_ID}/action`;
+  const url = `${CONOHA_COMPUTE_URL}/${TENANT_ID}/servers/${SERVER_ID}/action`;
   const body = { "os-start": null };
 
   console.log("=== VPS 起動リクエスト送信 ===");
