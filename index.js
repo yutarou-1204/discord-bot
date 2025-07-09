@@ -56,7 +56,7 @@ async function getToken() {
 
 // 2. VPS起動
 async function startVPS(token) {
-  const url = `${CONOHA_COMPUTE_URL}/${TENANT_ID}/servers/<server_id>/action`;
+  const url = `${CONOHA_COMPUTE_URL}/${TENANT_ID}/servers/b9d544e5-5606-4125-81f8-05a61d1e6f01/action`;
 
   const body = {
     "os-start": null,
