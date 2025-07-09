@@ -125,4 +125,20 @@ client.on("messageCreate", async (message) => {
   }
 });
 
-client.login(DISCORD_BOT_TOKEN);
+
+client.on("ready", () => {
+  console.log(`Logged in as ${client.user.tag}!`);
+});
+
+client.on("messageCreate", async (message) => {
+  if (message.author.bot) return;
+  if (message.content === "!ping") {
+    await message.reply("pong!");
+  }
+});
+
+client.login(process.env.DISCORD_TOKEN);
+
+// keep-alive
+setInterval(() => {}, 1 << 30);
+
