@@ -48,9 +48,11 @@ async function getToken() {
     }),
   });
 
-  if (!res.ok) throw new Error(`Auth failed: ${res.statusText}`);
   const token = res.headers.get("x-subject-token");
+  console.log("認証ステータス:", res.status);
+  if (!res.ok) throw new Error(`Auth failed: ${res.statusText}`);
   if (!token) throw new Error("Token not found in response headers");
+
   return token;
 }
 
@@ -65,9 +67,12 @@ async function getVPSStatus(token) {
     },
   });
 
-  if (!res.ok) throw new Error(`VPS status check failed: ${res.statusText}`);
   const data = await res.json();
-  return data.server.status; // "ACTIVE", "SHUTOFF" など
+  console.log("VPS状態取得ステータス:", res.status);
+  console.log("VPS状態:", data.server?.status);
+
+  if (!res.ok) throw new Error(`VPS status check failed: ${res.statusText}`);
+  return data.server.status;
 }
 
 // VPS起動
@@ -77,14 +82,22 @@ async function startVPS(token) {
     return "VPSはすでに起動しています。";
   }
 
-  const res = await fetch(`${CONOHA_COMPUTE_URL}/servers/${SERVER_ID}/action`, {
+  const url = `${CONOHA_COMPUTE_URL}/servers/${SERVER_ID}/action`;
+  const body = { "os-start": null };
+  console.log("VPS起動リクエスト:", url, JSON.stringify(body));
+
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       "X-Auth-Token": token,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ "os-start": null }),
+    body: JSON.stringify(body),
   });
+
+  console.log("VPS起動ステータス:", res.status);
+  const text = await res.text();
+  console.log("VPS起動レスポンス:", text);
 
   if (!res.ok) throw new Error(`VPS start failed: ${res.statusText}`);
   return "VPSを起動しました。";
@@ -92,7 +105,10 @@ async function startVPS(token) {
 
 // VPS停止
 async function stopVPS(token) {
-  const res = await fetch(`${CONOHA_COMPUTE_URL}/servers/${SERVER_ID}/action`, {
+  const url = `${CONOHA_COMPUTE_URL}/servers/${SERVER_ID}/action`;
+  console.log("VPS停止リクエスト:", url);
+
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       "X-Auth-Token": token,
@@ -101,6 +117,10 @@ async function stopVPS(token) {
     body: JSON.stringify({ "os-stop": null }),
   });
 
+  console.log("VPS停止ステータス:", res.status);
+  const text = await res.text();
+  console.log("VPS停止レスポンス:", text);
+
   if (!res.ok) throw new Error(`VPS stop failed: ${res.statusText}`);
   return "VPSを停止しました。";
 }
@@ -108,8 +128,11 @@ async function stopVPS(token) {
 // Palworld起動（SSH）
 async function startPalworldServer() {
   return new Promise((resolve, reject) => {
-    exec(`ssh ${SSH_USER}@${VPS_IP} "${PALWORLD_START_COMMAND}"`, (error, stdout) => {
-      if (error) reject(`SSH error: ${error.message}`);
+    exec(`ssh ${SSH_USER}@${VPS_IP} "${PALWORLD_START_COMMAND}"`, (error, stdout, stderr) => {
+      console.log("SSH実行 stdout:", stdout);
+      console.log("SSH実行 stderr:", stderr);
+
+      if (error) reject(new Error(`SSH error: ${error.message}`));
       else resolve(stdout.trim());
     });
   });
@@ -117,7 +140,7 @@ async function startPalworldServer() {
 
 // Discord Bot 処理
 client.on("ready", () => {
-  console.log(`Logged in as ${client.user.tag}!`);
+  console.log(`✅ Bot起動完了: ${client.user.tag}`);
 });
 
 client.on("messageCreate", async (message) => {
@@ -134,7 +157,14 @@ client.on("messageCreate", async (message) => {
       const result = await startPalworldServer();
       await message.channel.send(`${startMsg}\nPalworldサーバーを起動しました。\n接続先: ${VPS_IP}\n実行結果: ${result}`);
     } catch (err) {
-      await message.channel.send(`エラー: ${err.message}`);
+      console.error("=== !start エラー ===");
+      console.error("型:", typeof err);
+      console.error("内容:", err);
+      console.error("スタック:", err?.stack);
+
+      const errorMessage =
+        err instanceof Error ? err.message : typeof err === "string" ? err : JSON.stringify(err);
+      await message.channel.send(`エラー: ${errorMessage}`);
     }
   }
 
@@ -144,12 +174,19 @@ client.on("messageCreate", async (message) => {
       const msg = await stopVPS(token);
       await message.channel.send(msg);
     } catch (err) {
-      await message.channel.send(`エラー: ${err.message}`);
+      console.error("=== !stop エラー ===");
+      console.error("型:", typeof err);
+      console.error("内容:", err);
+      console.error("スタック:", err?.stack);
+
+      const errorMessage =
+        err instanceof Error ? err.message : typeof err === "string" ? err : JSON.stringify(err);
+      await message.channel.send(`エラー: ${errorMessage}`);
     }
   }
 });
 
 client.login(DISCORD_BOT_TOKEN);
 
-// Railway対応: 常駐維持
+// Railwayなどの常駐維持
 setInterval(() => {}, 1 << 30);
