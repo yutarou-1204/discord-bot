@@ -1,2 +1,2 @@
 [phases.setup]
-nixPkgs = ['openssh']
+nixPkgs = ['nodejs_20', 'openssh']
