@@ -13,7 +13,7 @@
   "description": "",
   "dependencies": {
     "discord.js": "^14.21.0",
-    "dotenv": "^17.x.x",
+    "dotenv": "^17.0.0",
     "node-fetch": "^3.3.2"
   }
 }
