@@ -3,14 +3,13 @@ dotenv.config();
 
 import { Client, GatewayIntentBits } from "discord.js";
 import fetch from "node-fetch";
-import { exec } from "child_process";
 
 // Discordクライアント設定
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
 });
 
-// ConoHa設定
+// ConoHa API設定
 const CONOHA_IDENTITY_URL = "https://identity.c3j1.conoha.io/v3/auth/tokens";
 const CONOHA_COMPUTE_URL = "https://compute.c3j1.conoha.io/v2.1";
 const TENANT_ID = "7544f37d10be4ff7a638d1b34c6732b1";
@@ -18,10 +17,10 @@ const SERVER_ID = "b9d544e5-5606-4125-81f8-05a61d1e6f01";
 const USERNAME = "gncu33184909";
 const PASSWORD = "Y6xLYEsN-k3muLU";
 
-// VPSサーバー情報
+// VPSとWebhook情報
 const VPS_IP = "160.251.181.17";
-const SSH_USER = "root";
-const PALWORLD_START_COMMAND = "/root/start.sh";
+const WEBHOOK_PORT = 3000;
+const WEBHOOK_URL = `http://${VPS_IP}:${WEBHOOK_PORT}/start-palworld`;
 
 // Discordトークン
 const DISCORD_BOT_TOKEN = process.env.DISCORD_TOKEN;
@@ -49,7 +48,6 @@ async function getToken() {
   });
 
   const token = res.headers.get("x-subject-token");
-  console.log("認証ステータス:", res.status);
   if (!res.ok) throw new Error(`Auth failed: ${res.statusText}`);
   if (!token) throw new Error("Token not found in response headers");
 
@@ -58,81 +56,58 @@ async function getToken() {
 
 // VPS状態取得
 async function getVPSStatus(token) {
-  const url = `${CONOHA_COMPUTE_URL}/servers/${SERVER_ID}`;
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      "X-Auth-Token": token,
-      "Content-Type": "application/json",
-    },
+  const res = await fetch(`${CONOHA_COMPUTE_URL}/servers/${SERVER_ID}`, {
+    headers: { "X-Auth-Token": token },
   });
-
   const data = await res.json();
-  console.log("VPS状態取得ステータス:", res.status);
-  console.log("VPS状態:", data.server?.status);
-
   if (!res.ok) throw new Error(`VPS status check failed: ${res.statusText}`);
-  return data.server.status;
+  return data.server?.status;
 }
 
 // VPS起動
 async function startVPS(token) {
   const status = await getVPSStatus(token);
-  if (status === "ACTIVE") {
-    return "VPSはすでに起動しています。";
-  }
+  if (status === "ACTIVE") return "✅ VPSはすでに起動しています。";
 
-  const url = `${CONOHA_COMPUTE_URL}/servers/${SERVER_ID}/action`;
-  const body = { "os-start": null };
-  console.log("VPS起動リクエスト:", url, JSON.stringify(body));
-
-  const res = await fetch(url, {
+  const res = await fetch(`${CONOHA_COMPUTE_URL}/servers/${SERVER_ID}/action`, {
     method: "POST",
-    headers: {
-      "X-Auth-Token": token,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
+    headers: { "X-Auth-Token": token, "Content-Type": "application/json" },
+    body: JSON.stringify({ "os-start": null }),
   });
 
-  console.log("VPS起動ステータス:", res.status);
-  const text = await res.text();
-  console.log("VPS起動レスポンス:", text);
-
   if (!res.ok) throw new Error(`VPS start failed: ${res.statusText}`);
-  return "VPSを起動しました。";
+  return "🚀 VPSの起動コマンドを送信しました。";
 }
 
 // VPS停止
 async function stopVPS(token) {
-  const url = `${CONOHA_COMPUTE_URL}/servers/${SERVER_ID}/action`;
-  console.log("VPS停止リクエスト:", url);
-
-  const res = await fetch(url, {
+  const res = await fetch(`${CONOHA_COMPUTE_URL}/servers/${SERVER_ID}/action`, {
     method: "POST",
-    headers: {
-      "X-Auth-Token": token,
-      "Content-Type": "application/json",
-    },
+    headers: { "X-Auth-Token": token, "Content-Type": "application/json" },
     body: JSON.stringify({ "os-stop": null }),
   });
 
-  console.log("VPS停止ステータス:", res.status);
-  const text = await res.text();
-  console.log("VPS停止レスポンス:", text);
-
   if (!res.ok) throw new Error(`VPS stop failed: ${res.statusText}`);
-  return "VPSを停止しました。";
+  return "🛑 VPSを停止しました。";
 }
 
+// Palworldサーバー起動
 async function startPalworldServer() {
-  const res = await fetch(`http://${VPS_IP}:3000/start-palworld`, { method: "POST" });
-
+  const res = await fetch(WEBHOOK_URL, { method: "POST" });
   const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`Webhook error: ${res.status} ${text}`);
-  }
+  if (!res.ok) throw new Error(`Webhook error: ${res.status} ${text}`);
   return text;
+}
+
+// 起動完了までポーリング
+async function waitForVPS(token, maxRetries = 15, delayMs = 10000) {
+  for (let i = 0; i < maxRetries; i++) {
+    const status = await getVPSStatus(token);
+    if (status === "ACTIVE") return;
+    console.log(`⌛ VPS起動待機中... (${i + 1}/${maxRetries})`);
+    await new Promise((res) => setTimeout(res, delayMs));
+  }
+  throw new Error("VPSが起動しませんでした（タイムアウト）");
 }
 
 // Discord Bot 処理
@@ -148,42 +123,36 @@ client.on("messageCreate", async (message) => {
   }
 
   if (message.content === "!start") {
+    await message.channel.send("🔓 VPSの起動を開始します...");
     try {
       const token = await getToken();
       const startMsg = await startVPS(token);
-      const result = await startPalworldServer();
-      await message.channel.send(`${startMsg}\nPalworldサーバーを起動しました。\n接続先: ${VPS_IP}\n実行結果: ${result}`);
-    } catch (err) {
-      console.error("=== !start エラー ===");
-      console.error("型:", typeof err);
-      console.error("内容:", err);
-      console.error("スタック:", err?.stack);
+      await message.channel.send(startMsg);
 
-      const errorMessage =
-        err instanceof Error ? err.message : typeof err === "string" ? err : JSON.stringify(err);
-      await message.channel.send(`エラー: ${errorMessage}`);
+      await waitForVPS(token);
+      const result = await startPalworldServer();
+
+      await message.channel.send(`🎮 Palworldサーバーを起動しました！\n📡 接続先: \`${VPS_IP}\`\n📦 結果: ${result}`);
+    } catch (err) {
+      console.error("=== !start エラー ===", err);
+      await message.channel.send(`⚠️ エラー: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
   if (message.content === "!stop") {
+    await message.channel.send("🛑 VPSを停止中...");
     try {
       const token = await getToken();
       const msg = await stopVPS(token);
       await message.channel.send(msg);
     } catch (err) {
-      console.error("=== !stop エラー ===");
-      console.error("型:", typeof err);
-      console.error("内容:", err);
-      console.error("スタック:", err?.stack);
-
-      const errorMessage =
-        err instanceof Error ? err.message : typeof err === "string" ? err : JSON.stringify(err);
-      await message.channel.send(`エラー: ${errorMessage}`);
+      console.error("=== !stop エラー ===", err);
+      await message.channel.send(`⚠️ エラー: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 });
 
 client.login(DISCORD_BOT_TOKEN);
 
-// Railwayなどの常駐維持
+// Railway維持用
 setInterval(() => {}, 1 << 30);
