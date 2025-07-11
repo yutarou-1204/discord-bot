@@ -125,17 +125,14 @@ async function stopVPS(token) {
   return "VPSを停止しました。";
 }
 
-// Palworld起動（SSH）
 async function startPalworldServer() {
-  return new Promise((resolve, reject) => {
-    exec(`ssh ${SSH_USER}@${VPS_IP} "${PALWORLD_START_COMMAND}"`, (error, stdout, stderr) => {
-      console.log("SSH実行 stdout:", stdout);
-      console.log("SSH実行 stderr:", stderr);
+  const res = await fetch(`http://${VPS_IP}:3000/start-palworld`, { method: "POST" });
 
-      if (error) reject(new Error(`SSH error: ${error.message}`));
-      else resolve(stdout.trim());
-    });
-  });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Webhook error: ${res.status} ${text}`);
+  }
+  return text;
 }
 
 // Discord Bot 処理
