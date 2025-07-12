@@ -17,10 +17,9 @@ const SERVER_ID = "b9d544e5-5606-4125-81f8-05a61d1e6f01";
 const USERNAME = "gncu33184909";
 const PASSWORD = "Y6xLYEsN-k3muLU";
 
-// VPSとWebhook情報
+// Palworld接続先ポート
 const VPS_IP = "160.251.181.17";
-const WEBHOOK_PORT = 3000;
-const WEBHOOK_URL = `http://${VPS_IP}:${WEBHOOK_PORT}/start-palworld`;
+const PALWORLD_PORT = 8211;
 
 // Discordトークン
 const DISCORD_BOT_TOKEN = process.env.DISCORD_TOKEN;
@@ -91,14 +90,6 @@ async function stopVPS(token) {
   return "🛑 VPSを停止しました。";
 }
 
-// Palworldサーバー起動
-async function startPalworldServer() {
-  const res = await fetch(WEBHOOK_URL, { method: "POST" });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`Webhook error: ${res.status} ${text}`);
-  return text;
-}
-
 // 起動完了までポーリング
 async function waitForVPS(token, maxRetries = 15, delayMs = 10000) {
   for (let i = 0; i < maxRetries; i++) {
@@ -130,9 +121,8 @@ client.on("messageCreate", async (message) => {
       await message.channel.send(startMsg);
 
       await waitForVPS(token);
-      const result = await startPalworldServer();
 
-      await message.channel.send(`🎮 Palworldサーバーを起動しました！\n📡 接続先: \`${VPS_IP}\`\n📦 結果: ${result}`);
+      await message.channel.send(`🎮 Palworldサーバーは自動起動しています。\n📡 接続先: \`${VPS_IP}:${PALWORLD_PORT}\``);
     } catch (err) {
       console.error("=== !start エラー ===", err);
       await message.channel.send(`⚠️ エラー: ${err instanceof Error ? err.message : String(err)}`);
@@ -154,5 +144,5 @@ client.on("messageCreate", async (message) => {
 
 client.login(DISCORD_BOT_TOKEN);
 
-// Railway維持用
+// Railwayなどの常駐維持用
 setInterval(() => {}, 1 << 30);
