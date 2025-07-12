@@ -13,12 +13,12 @@ const client = new Client({
 const CONOHA_IDENTITY_URL = "https://identity.c3j1.conoha.io/v3/auth/tokens";
 const CONOHA_COMPUTE_URL = "https://compute.c3j1.conoha.io/v2.1";
 const TENANT_ID = "7544f37d10be4ff7a638d1b34c6732b1";
-const SERVER_ID = "9900f299-4fac-42ce-a590-fcc7f5020922";
+const SERVER_ID = "b9d544e5-5606-4125-81f8-05a61d1e6f01";
 const USERNAME = "gncu33184909";
 const PASSWORD = "Y6xLYEsN-k3muLU";
 
 // Palworld接続先ポート
-const VPS_IP = "160.251.139.130";
+const VPS_IP = "160.251.181.17";
 const PALWORLD_PORT = 8211;
 
 // Discordトークン
