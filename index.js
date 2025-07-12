@@ -18,7 +18,7 @@ const USERNAME = "gncu33184909";
 const PASSWORD = "Y6xLYEsN-k3muLU";
 
 // Palworld接続先ポート
-const VPS_IP = "160.251.181.17";
+const VPS_IP = "160.251.139.130";
 const PALWORLD_PORT = 8211;
 
 // Discordトークン
