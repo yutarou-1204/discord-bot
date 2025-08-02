@@ -88,7 +88,7 @@ async function stopInstance() {
     instance: GCP_INSTANCE_NAME,
   });
 
-  return "🛑 インスタンス停止を開始しました。";
+  return "🛑 インスタンスを停止しました。";
 }
 
 async function waitForRunning(maxRetries = 20, delayMs = 10000) {
