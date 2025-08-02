@@ -1,109 +1,113 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { google } from "googleapis";
 import { Client, GatewayIntentBits } from "discord.js";
-import fetch from "node-fetch";
 
-// Discordクライアント設定
+const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+const GCP_PROJECT_ID = process.env.GCP_PROJECT_ID;
+const GCP_ZONE = process.env.GCP_ZONE;
+const GCP_INSTANCE_NAME = process.env.GCP_INSTANCE_NAME;
+
+const VPS_IP = process.env.VPS_IP;
+const PALWORLD_PORT = process.env.PALWORLD_PORT || "8211";
+
+const GCP_SERVICE_ACCOUNT_JSON = process.env.GCP_SERVICE_ACCOUNT_JSON;
+if (!GCP_SERVICE_ACCOUNT_JSON) {
+  console.error("❌ 環境変数 GCP_SERVICE_ACCOUNT_JSON が設定されていません。");
+  process.exit(1);
+}
+
+let cachedKeyPath = null;
+
+async function getAuthClient() {
+  if (!cachedKeyPath) {
+    // 一時ファイルのパスを作成
+    const tmpDir = os.tmpdir();
+    const keyPath = path.join(tmpDir, "gcp-sa-key.json");
+
+    // 環境変数のJSONをファイルに書き出し
+    fs.writeFileSync(keyPath, GCP_SERVICE_ACCOUNT_JSON, { mode: 0o600 });
+    cachedKeyPath = keyPath;
+  }
+
+  const auth = new google.auth.GoogleAuth({
+    keyFile: cachedKeyPath,
+    scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+  });
+
+  return auth.getClient();
+}
+
+async function getCompute() {
+  const authClient = await getAuthClient();
+  return google.compute({
+    version: "v1",
+    auth: authClient,
+  });
+}
+
+async function getInstanceStatus() {
+  const compute = await getCompute();
+
+  const res = await compute.instances.get({
+    project: GCP_PROJECT_ID,
+    zone: GCP_ZONE,
+    instance: GCP_INSTANCE_NAME,
+  });
+
+  return res.data.status; // e.g. "RUNNING", "TERMINATED"
+}
+
+async function startInstance() {
+  const compute = await getCompute();
+
+  const status = await getInstanceStatus();
+  if (status === "RUNNING") {
+    return "✅ インスタンスはすでに起動中です。";
+  }
+
+  await compute.instances.start({
+    project: GCP_PROJECT_ID,
+    zone: GCP_ZONE,
+    instance: GCP_INSTANCE_NAME,
+  });
+
+  return "🚀 インスタンス起動を開始しました。";
+}
+
+async function stopInstance() {
+  const compute = await getCompute();
+
+  await compute.instances.stop({
+    project: GCP_PROJECT_ID,
+    zone: GCP_ZONE,
+    instance: GCP_INSTANCE_NAME,
+  });
+
+  return "🛑 インスタンス停止を開始しました。";
+}
+
+async function waitForRunning(maxRetries = 20, delayMs = 10000) {
+  for (let i = 0; i < maxRetries; i++) {
+    const status = await getInstanceStatus();
+    if (status === "RUNNING") return;
+    console.log(`⌛ インスタンス起動待ち中... (${i + 1}/${maxRetries})`);
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  throw new Error("インスタンスが起動しませんでした（タイムアウト）");
+}
+
+// Discord Bot 設定
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
 });
 
-// ConoHa API設定
-const CONOHA_IDENTITY_URL = "https://identity.c3j1.conoha.io/v3/auth/tokens";
-const CONOHA_COMPUTE_URL = "https://compute.c3j1.conoha.io/v2.1";
-const TENANT_ID = "7544f37d10be4ff7a638d1b34c6732b1";
-const SERVER_ID = "e082a5ff-018b-4bc9-994b-4d5494185094";
-const USERNAME = "gncu33184909";
-const PASSWORD = "Y6xLYEsN-k3muLU";
-
-// Palworld接続先ポート
-const VPS_IP = "160.251.250.40";
-const PALWORLD_PORT = 8211;
-
-// Discordトークン
-const DISCORD_BOT_TOKEN = process.env.DISCORD_TOKEN;
-
-// トークン取得
-async function getToken() {
-  const res = await fetch(CONOHA_IDENTITY_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      auth: {
-        identity: {
-          methods: ["password"],
-          password: {
-            user: {
-              name: USERNAME,
-              domain: { id: "default" },
-              password: PASSWORD,
-            },
-          },
-        },
-        scope: { project: { id: TENANT_ID } },
-      },
-    }),
-  });
-
-  const token = res.headers.get("x-subject-token");
-  if (!res.ok) throw new Error(`Auth failed: ${res.statusText}`);
-  if (!token) throw new Error("Token not found in response headers");
-
-  return token;
-}
-
-// VPS状態取得
-async function getVPSStatus(token) {
-  const res = await fetch(`${CONOHA_COMPUTE_URL}/servers/${SERVER_ID}`, {
-    headers: { "X-Auth-Token": token },
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(`VPS status check failed: ${res.statusText}`);
-  return data.server?.status;
-}
-
-// VPS起動
-async function startVPS(token) {
-  const status = await getVPSStatus(token);
-  if (status === "ACTIVE") return "✅ VPSはすでに起動しています。";
-
-  const res = await fetch(`${CONOHA_COMPUTE_URL}/servers/${SERVER_ID}/action`, {
-    method: "POST",
-    headers: { "X-Auth-Token": token, "Content-Type": "application/json" },
-    body: JSON.stringify({ "os-start": null }),
-  });
-
-  if (!res.ok) throw new Error(`VPS start failed: ${res.statusText}`);
-  return "🚀 VPSの起動コマンドを送信しました。";
-}
-
-// VPS停止
-async function stopVPS(token) {
-  const res = await fetch(`${CONOHA_COMPUTE_URL}/servers/${SERVER_ID}/action`, {
-    method: "POST",
-    headers: { "X-Auth-Token": token, "Content-Type": "application/json" },
-    body: JSON.stringify({ "os-stop": null }),
-  });
-
-  if (!res.ok) throw new Error(`VPS stop failed: ${res.statusText}`);
-  return "🛑 VPSを停止しました。";
-}
-
-// 起動完了までポーリング
-async function waitForVPS(token, maxRetries = 15, delayMs = 10000) {
-  for (let i = 0; i < maxRetries; i++) {
-    const status = await getVPSStatus(token);
-    if (status === "ACTIVE") return;
-    console.log(`⌛ VPS起動待機中... (${i + 1}/${maxRetries})`);
-    await new Promise((res) => setTimeout(res, delayMs));
-  }
-  throw new Error("VPSが起動しませんでした（タイムアウト）");
-}
-
-// Discord Bot 処理
-client.on("ready", () => {
-  console.log(`✅ Bot起動完了: ${client.user.tag}`);
+client.once("ready", () => {
+  console.log(`✅ Bot 起動完了: ${client.user.tag}`);
 });
 
 client.on("messageCreate", async (message) => {
@@ -114,35 +118,33 @@ client.on("messageCreate", async (message) => {
   }
 
   if (message.content === "!start") {
-    await message.channel.send("🔓 VPSの起動を開始します...");
+    await message.channel.send("🔓 インスタンス起動処理を開始します...");
     try {
-      const token = await getToken();
-      const startMsg = await startVPS(token);
-      await message.channel.send(startMsg);
+      const msg = await startInstance();
+      await message.channel.send(msg);
 
-      await waitForVPS(token);
+      await waitForRunning();
 
-      await message.channel.send(`🎮 Palworldサーバーは自動起動しています。\n📡 接続先: \`${VPS_IP}:${PALWORLD_PORT}\``);
+      await message.channel.send(`🎮 Palworldサーバーは起動しました。\n📡 接続先: \`${VPS_IP}:${PALWORLD_PORT}\``);
     } catch (err) {
-      console.error("=== !start エラー ===", err);
-      await message.channel.send(`⚠️ エラー: ${err instanceof Error ? err.message : String(err)}`);
+      console.error("!start エラー", err);
+      await message.channel.send(`⚠️ エラー: ${err.message}`);
     }
   }
 
   if (message.content === "!stop") {
-    await message.channel.send("🛑 VPSを停止中...");
+    await message.channel.send("🛑 インスタンス停止処理を開始します...");
     try {
-      const token = await getToken();
-      const msg = await stopVPS(token);
+      const msg = await stopInstance();
       await message.channel.send(msg);
     } catch (err) {
-      console.error("=== !stop エラー ===", err);
-      await message.channel.send(`⚠️ エラー: ${err instanceof Error ? err.message : String(err)}`);
+      console.error("!stop エラー", err);
+      await message.channel.send(`⚠️ エラー: ${err.message}`);
     }
   }
 });
 
-client.login(DISCORD_BOT_TOKEN);
+client.login(DISCORD_TOKEN);
 
-// Railwayなどの常駐維持用
+// 常駐維持用（Railwayで使う）
 setInterval(() => {}, 1 << 30);
